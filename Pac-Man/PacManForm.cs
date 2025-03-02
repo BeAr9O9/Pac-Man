@@ -295,6 +295,12 @@ namespace PacManWindowsForms
             if (!pacTarget.HasValue)
             {
                 // Set the target cell based on the current direction.
+                Point desiredCell = new Point(updateX(pacGridPos.X, nextDirection.X), updateY(pacGridPos.Y, nextDirection.Y));
+                if (maze[desiredCell.Y, desiredCell.X] != 1)
+                {
+                    // Change direction immediately.
+                    currentDirection = nextDirection;
+                }
                 Point newCell = new Point(updateX(pacGridPos.X, currentDirection.X), updateY(pacGridPos.Y, currentDirection.Y));
                 if ((pacGridPos.X == 0 && currentDirection.X == -1) || (pacGridPos.X == cols - 1 && currentDirection.X == 1) || (pacGridPos.Y == 0 && currentDirection.Y == -1) || (pacGridPos.Y == rows - 1 && currentDirection.Y == 1))
                 {
@@ -428,16 +434,18 @@ namespace PacManWindowsForms
         // Pac-Man moves one cell at a time. The move is initiated only if the next cell in that direction is not a wall.
 
         private Point currentDirection = new Point(0, 0);
+        private Point nextDirection = new Point(0, 0);
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Up && maze[updateY(pacGridPos.Y, -1), pacGridPos.X] != 1)
-                currentDirection = new Point(0, -1);
-            else if (e.KeyCode == Keys.Down && maze[updateY(pacGridPos.Y, 1), pacGridPos.X] != 1)
-                currentDirection = new Point(0, 1);
-            else if (e.KeyCode == Keys.Left && maze[pacGridPos.Y, updateX(pacGridPos.X, -1)] != 1)
-                currentDirection = new Point(-1, 0);
-            else if (e.KeyCode == Keys.Right && maze[pacGridPos.Y, updateX(pacGridPos.X, 1)] != 1)
-                currentDirection = new Point(1, 0);
+            // Always update the buffered nextDirection.
+            if (e.KeyCode == Keys.Up)
+                nextDirection = new Point(0, -1);
+            else if (e.KeyCode == Keys.Down)
+                nextDirection = new Point(0, 1);
+            else if (e.KeyCode == Keys.Left)
+                nextDirection = new Point(-1, 0);
+            else if (e.KeyCode == Keys.Right)
+                nextDirection = new Point(1, 0);
         }
 
         // Render the maze, Pac-Man, and ghosts.
