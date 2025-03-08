@@ -7,12 +7,6 @@ using System.IO;
 
 namespace PacManWindowsForms
 {
-    // This implementation divides the game screen into a grid. Each cell of the grid is gridSize pixels on a side.
-    // The maze is represented as a 2D matrix where each cell indicates a wall, a dot, or an empty space.
-    // Both Pac-Man and the ghosts have an integer grid position (their logical position in the maze)
-    // and a smooth screen position (PointF) that is animated between grid cell centers.
-    // Ghost AI uses a Floyd–Warshall algorithm (Roy-Floyd method) to precompute the shortest paths through the maze.
-    // When a ghost needs to chase Pac-Man, it uses the precomputed "next" matrix to decide its next grid cell step.
     public class PacManForm : Form
     {
         // Grid and maze settings.
@@ -60,6 +54,9 @@ namespace PacManWindowsForms
         // Next step matrix: next[i,j] = index of the next cell from i in the shortest path to j.
         int[,] nextMatrix;
 
+        // Score field
+        private int score = 0;
+
         // Use a large number as "infinity".
         const int INF = 1000000;
 
@@ -75,7 +72,6 @@ namespace PacManWindowsForms
             BuildGraphAndComputePaths();
 
             // Initialize Pac-Man at a fixed start position (grid coordinate 1,1).
-            pacGridPos = new Point(1, 1);
             pacScreenPos = GetCellCenter(pacGridPos);
 
             // Add one ghost, starting near bottom right (ensure not a wall).
@@ -104,8 +100,6 @@ namespace PacManWindowsForms
             rows = int.Parse(line);
             line = sr.ReadLine();
             cols = int.Parse(line);
-
-
 
             // Fill maze with dots (2).
             for (int i = 0; i < rows; i++)
@@ -280,7 +274,7 @@ namespace PacManWindowsForms
                 if (diff.Length() < gridSize / 2)
                 {
                     gameTimer.Stop();
-                    MessageBox.Show("Game Over!");
+                    MessageBox.Show($"Game Over! Your score: {score}");
                     Application.Exit();
                 }
             }
@@ -288,7 +282,6 @@ namespace PacManWindowsForms
             Invalidate(); // request redraw.
         }
 
-        // Update Pac-Man's position: move smoothly from current cell center to target cell center.
         // Update Pac-Man's position: move smoothly from current cell center to target cell center.
         private void UpdatePacMan()
         {
@@ -338,11 +331,12 @@ namespace PacManWindowsForms
                         if (maze[pacGridPos.Y, pacGridPos.X] == 2)
                         {
                             maze[pacGridPos.Y, pacGridPos.X] = 0;
+                            score += 10; // Increase score by 10 for each dot.
                             // Check if all dots are eaten.
                             if (IsAllDotsEaten())
                             {
                                 gameTimer.Stop();
-                                MessageBox.Show("You Win!");
+                                MessageBox.Show($"You Win! Your score: {score}");
                                 Application.Exit();
                             }
                         }
@@ -379,7 +373,6 @@ namespace PacManWindowsForms
             }
             return true;
         }
-
 
         // Update a ghost's position with smoothing and choose its next move based on the shortest path.
         private void UpdateGhost(Ghost ghost)
@@ -484,6 +477,9 @@ namespace PacManWindowsForms
                 Rectangle ghostRect = new Rectangle((int)(ghost.ScreenPos.X - gridSize / 2), (int)(ghost.ScreenPos.Y - gridSize / 2), gridSize, gridSize);
                 g.FillEllipse(Brushes.Red, ghostRect);
             }
+
+            // Draw the score.
+            g.DrawString($"Score: {score}", new Font("Arial", 16), Brushes.White, new PointF(10, 10));
         }
 
         private int updateX(int cx, int dir)
