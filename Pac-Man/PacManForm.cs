@@ -60,6 +60,9 @@ namespace PacManWindowsForms
         // Use a large number as "infinity".
         const int INF = 1000000;
 
+        private Bitmap pacManImage;
+        private float pacManRotationAngle = 0f;
+
         public PacManForm()
         {
             InitializeComponent();
@@ -73,6 +76,8 @@ namespace PacManWindowsForms
 
             // Initialize Pac-Man at a fixed start position (grid coordinate 1,1).
             pacScreenPos = GetCellCenter(pacGridPos);
+
+            pacManImage = new Bitmap("pacman.png");
 
             // Add one ghost, starting near bottom right (ensure not a wall).
             Ghost ghost = new Ghost
@@ -94,7 +99,7 @@ namespace PacManWindowsForms
         // Initialize the maze: fill with dots and build borders and some inner walls.
         private void InitializeMaze()
         {
-            StreamReader sr = new StreamReader(@"C:\Users\DAVID\Desktop\ceSarpe\Pac-Man\Pac-Man\maze.txt");
+            StreamReader sr = new StreamReader(@"maze.txt");
             string line;
             line = sr.ReadLine();
             rows = int.Parse(line);
@@ -432,16 +437,29 @@ namespace PacManWindowsForms
         {
             // Always update the buffered nextDirection.
             if (e.KeyCode == Keys.Up)
+            {
                 nextDirection = new Point(0, -1);
+                pacManRotationAngle = 270f;
+            }
             else if (e.KeyCode == Keys.Down)
+            {
                 nextDirection = new Point(0, 1);
+                pacManRotationAngle = 90f;
+            }
             else if (e.KeyCode == Keys.Left)
+            {
                 nextDirection = new Point(-1, 0);
+                pacManRotationAngle = 180f;
+            }
             else if (e.KeyCode == Keys.Right)
+            {
                 nextDirection = new Point(1, 0);
+                pacManRotationAngle = 0f;
+            }
         }
 
         // Render the maze, Pac-Man, and ghosts.
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -469,7 +487,11 @@ namespace PacManWindowsForms
 
             // Draw Pac-Man as an orange circle.
             Rectangle pacRect = new Rectangle((int)(pacScreenPos.X - gridSize / 2), (int)(pacScreenPos.Y - gridSize / 2), gridSize, gridSize);
-            g.FillEllipse(Brushes.Orange, pacRect);
+            g.TranslateTransform(pacRect.X + pacRect.Width / 2, pacRect.Y + pacRect.Height / 2);
+            g.RotateTransform(pacManRotationAngle);
+            g.TranslateTransform(-(pacRect.X + pacRect.Width / 2), -(pacRect.Y + pacRect.Height / 2));
+            g.DrawImage(pacManImage, pacRect);
+            g.ResetTransform();
 
             // Draw ghosts as red circles.
             foreach (var ghost in ghosts)
