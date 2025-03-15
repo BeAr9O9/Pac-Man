@@ -372,7 +372,7 @@ namespace PacManWindowsForms
                 {
                     powerUpActive = false;
                     // Eliberează fantomele din punctul de spawn
-                    foreach (var ghost in ghosts)
+                    foreach (var ghost in ghosts.ToList())
                     {
                         ghost.isVulnerable = false;
                         ghost.isAtSpawn = false;
@@ -384,13 +384,13 @@ namespace PacManWindowsForms
             UpdatePacMan();
 
             // Update ghosts.
-            foreach (var ghost in ghosts)
+            foreach (var ghost in ghosts.ToList())
             {
                 UpdateGhost(ghost);
             }
 
             // Check collision: if Pac-Man and any ghost are within a threshold distance.
-            foreach (var ghost in ghosts)
+            foreach (var ghost in ghosts.ToList())
             {
                 if (!ghost.isAtSpawn) // Verifică coliziunea doar dacă fantoma nu este deja în punctul de spawn
                 {
@@ -410,8 +410,7 @@ namespace PacManWindowsForms
                         else if (!powerUpActive)
                         {
                             gameTimer.Stop();
-                            MessageBox.Show($"Game Over! Your score: {score}");
-                            Application.Exit();
+                            ShowGameOverMessage();
                         }
                     }
                 }
@@ -419,6 +418,54 @@ namespace PacManWindowsForms
 
             Invalidate(); // request redraw.
         }
+
+
+        private void ShowGameOverMessage()
+        {
+            var result = MessageBox.Show($"Game Over! Your score: {score}\nDo you want to restart?", "Game Over", MessageBoxButtons.YesNo);
+            if (result == DialogResult.Yes)
+            {
+                RestartGame();
+            }
+            else
+            {
+                Application.Exit();
+            }
+        }
+
+        private void RestartGame()
+        {
+            // Reset the game state
+            score = 0;
+            powerUpActive = false;
+            powerUpTimer = 0;
+            pacGridPos = new Point(1, 1);
+            pacScreenPos = GetCellCenter(pacGridPos);
+            pacTarget = null;
+            currentDirection = new Point(0, 0);
+            nextDirection = new Point(0, 0);
+
+            // Reset ghosts
+            foreach (var ghost in ghosts)
+            {
+                ghost.isVulnerable = false;
+                ghost.isAtSpawn = false;
+                ghost.GridPos = ghost.spawnPoint;
+                ghost.ScreenPos = GetCellCenter(ghost.spawnPoint);
+                ghost.Target = null;
+            }
+
+            // Reinitialize the maze
+            InitializeMaze();
+            BuildGraphAndComputePaths();
+
+            // Restart the game timer
+            gameTimer.Start();
+
+            // Redraw the form
+            Invalidate();
+        }
+
 
         // Update Pac-Man's position: move smoothly from current cell center to target cell center.
         private void UpdatePacMan()
@@ -913,6 +960,7 @@ namespace PacManWindowsForms
             this.ResumeLayout(false);
         }
     }
+
 
     // Extension method for PointF subtraction and length calculation.
     public static class PointFExtensions
