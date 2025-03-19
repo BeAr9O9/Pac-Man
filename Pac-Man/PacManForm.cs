@@ -4,44 +4,108 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using System.IO;
+using System.Media;
 
 namespace PacManWindowsForms
 {
     public class PacManForm : Form
     {
         // Grid and maze settings.
-        const int gridSize = 30;
-        int rows = 25;
-        int cols = 25;
-        const int rMax = 100;
-        const int cMax = 100;
+        public const int gridSize = 30;
+        public int rows = 25;
+        public int cols = 25;
+        public const int rMax = 100;
+        public const int cMax = 100;
 
         // Maze grid: 0 = empty, 1 = wall, 2 = dot.
-        int[,] maze = new int[rMax, cMax];
+        public int[,] maze = new int[rMax, cMax];
 
-        bool pacTeleport = false;
+        public bool pacTeleport = false;
 
         // Pac-Man state: grid position and smooth screen position.
-        Point pacGridPos;
-        PointF pacScreenPos;
+        public Point pacGridPos;
+        public PointF pacScreenPos;
         // pacTarget holds the next grid cell Pac-Man is moving towards.
-        Point? pacTarget = null;
+        public Point? pacTarget = null;
         // Pac-Man's speed in pixels per tick.
-        const float pacSpeed = 5f;
+        public const float pacSpeed = 5f;
+
+        public Point currentDirection = new Point(0, 0);
+        public Point nextDirection = new Point(0, 0);
+
+        SoundPlayer soundPlayer = new SoundPlayer("eat.wav");
+
 
         // Ghost class to encapsulate each ghost's state.
-        class Ghost
+        public class Ghost
         {
             public bool ghostTeleport = false;
-
             public Point GridPos;
             public PointF ScreenPos;
             // The target grid cell of the ghost (the next cell along the shortest path to Pac-Man).
             public Point? Target;
+            public float ghostSpeed = 4f;
+
+            public Ghost(bool ghostTeleport, Point gridPos, PointF screenPos, Point? target, float ghostSpeed)
+            {
+                this.ghostTeleport = ghostTeleport;
+                GridPos = gridPos;
+                ScreenPos = screenPos;
+                Target = target;
+                this.ghostSpeed = ghostSpeed;
+            }
+
+            public void UpdateGhost(PacManForm form)
+            {
+                Point? nextStep = form.GetNextStep(this.GridPos, form.pacGridPos);
+                this.Target = nextStep.HasValue ? nextStep : this.GridPos;
+
+                if (this.Target.HasValue)
+                {
+                    if ((this.GridPos.X == 0 && this.Target.Value.X == form.cols - 1) || (this.GridPos.X == form.cols - 1 && this.Target.Value.X == 0) || (this.GridPos.Y == 0 && this.Target.Value.Y == form.rows - 1) || (this.GridPos.Y == form.rows - 1 && this.Target.Value.Y == 0))
+                    {
+                        if (form.maze[this.Target.Value.Y, this.Target.Value.X] != 1)
+                            this.ghostTeleport = true;
+                    }
+                    else
+                    {
+                        this.ghostTeleport = false;
+                    }
+
+                    if (!this.ghostTeleport)
+                    {
+                        // Move towards the target cell.
+                        PointF targetCenter = form.GetCellCenter(this.Target.Value);
+                        PointF diff = new PointF(targetCenter.X - this.ScreenPos.X, targetCenter.Y - this.ScreenPos.Y);
+                        float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
+                        if (distance < ghostSpeed)
+                        {
+                            // Reached the next grid cell.
+                            this.ScreenPos = targetCenter;
+                            this.GridPos = this.Target.Value;
+                            this.Target = null; // Trigger recalculation on next update.
+                        }
+                        else
+                        {
+                            float vx = diff.X / distance;
+                            float vy = diff.Y / distance;
+                            this.ScreenPos = new PointF(this.ScreenPos.X + vx * ghostSpeed, this.ScreenPos.Y + vy * ghostSpeed);
+                        }
+                    }
+                    else
+                    {
+                        this.ScreenPos = form.GetCellCenter(this.Target.Value);
+                        this.GridPos = this.Target.Value;
+                        Point? nextStep1 = form.GetNextStep(this.GridPos, form.pacGridPos);
+                        this.Target = nextStep1.HasValue ? nextStep1 : this.GridPos;
+                    }
+                }
+            }
         }
         List<Ghost> ghosts = new List<Ghost>();
-        // Ghost speed in pixels per tick.
-        const float ghostSpeed = 4f;
+
+
+
 
         // Timer for smooth animations (20ms interval for ~50 FPS).
         Timer gameTimer;
@@ -53,6 +117,8 @@ namespace PacManWindowsForms
         List<Point> indexToCell = new List<Point>();
         // Next step matrix: next[i,j] = index of the next cell from i in the shortest path to j.
         int[,] nextMatrix;
+
+        int totalDots = 0;
 
         // Score field
         private int score = 0;
@@ -74,14 +140,6 @@ namespace PacManWindowsForms
             // Initialize Pac-Man at a fixed start position (grid coordinate 1,1).
             pacScreenPos = GetCellCenter(pacGridPos);
 
-            // Add one ghost, starting near bottom right (ensure not a wall).
-            Ghost ghost = new Ghost
-            {
-                GridPos = new Point(100, 100),
-                ScreenPos = GetCellCenter(new Point(100, 100)),
-                Target = null
-            };
-            ghosts.Add(ghost);
 
             gameTimer = new Timer();
             gameTimer.Interval = 20; // 20ms per tick ~50 FPS.
@@ -92,9 +150,9 @@ namespace PacManWindowsForms
         }
 
         // Initialize the maze: fill with dots and build borders and some inner walls.
-        private void InitializeMaze()
+        public void InitializeMaze()
         {
-            StreamReader sr = new StreamReader(@"C:\Users\DAVID\Desktop\ceSarpe\Pac-Man\Pac-Man\maze.txt");
+            StreamReader sr = new StreamReader(@"maze.txt");
             string line;
             line = sr.ReadLine();
             rows = int.Parse(line);
@@ -112,7 +170,10 @@ namespace PacManWindowsForms
                     else if (line[j] == '#')
                         maze[i, j] = 1;
                     else if (line[j] == '.')
+                    {
                         maze[i, j] = 2;
+                        totalDots++;
+                    }
                     else if (line[j] == 'P')
                     {
                         maze[i, j] = 0;
@@ -122,12 +183,9 @@ namespace PacManWindowsForms
                     else if (line[j] == 'G')
                     {
                         maze[i, j] = 0;
-                        Ghost ghost = new Ghost
-                        {
-                            GridPos = new Point(j, i),
-                            ScreenPos = GetCellCenter(new Point(j, i)),
-                            Target = null
-                        };
+
+                        Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenter(new Point(j, i)), null, 4f);
+
                         ghosts.Add(ghost);
                     }
                 }
@@ -135,7 +193,7 @@ namespace PacManWindowsForms
         }
 
         // Build a graph from the maze and precompute shortest paths using Floyd–Warshall.
-        private void BuildGraphAndComputePaths()
+        public void BuildGraphAndComputePaths()
         {
             // Map each open cell (non-wall) to a unique index.
             cellToIndex.Clear();
@@ -237,7 +295,7 @@ namespace PacManWindowsForms
         }
 
         // Returns the next grid cell along the shortest path from 'from' to 'to'.
-        private Point? GetNextStep(Point from, Point to)
+        public Point? GetNextStep(Point from, Point to)
         {
             if (!cellToIndex.ContainsKey(from) || !cellToIndex.ContainsKey(to))
                 return null;
@@ -250,40 +308,47 @@ namespace PacManWindowsForms
         }
 
         // Returns the center point (in screen coordinates) of a given grid cell.
-        private PointF GetCellCenter(Point cell)
+        public PointF GetCellCenter(Point cell)
         {
             return new PointF(cell.X * gridSize + gridSize / 2, cell.Y * gridSize + gridSize / 2);
         }
-
-        // The GameLoop is called every timer tick. It updates positions using smooth animations.
-        private void GameLoop(object sender, EventArgs e)
+        public int updateX(int cx, int dir)
         {
-            // Update Pac-Man's movement.
-            UpdatePacMan();
+            if (dir == 0)
+                return cx;
+            if (dir == 1 && cx == cols - 1)
+                return 0;
+            if (dir == -1 && cx == 0)
+                return cols - 1;
+            return cx + dir;
+        }
 
-            // Update ghosts.
-            foreach (var ghost in ghosts)
-            {
-                UpdateGhost(ghost);
-            }
+        public int updateY(int cy, int dir)
+        {
+            if (dir == 0)
+                return cy;
+            if (dir == 1 && cy == rows - 1)
+                return 0;
+            if (dir == -1 && cy == 0)
+                return rows - 1;
+            return cy + dir;
+        }
 
-            // Check collision: if Pac-Man and any ghost are within a threshold distance.
-            foreach (var ghost in ghosts)
-            {
-                PointF diff = ghost.ScreenPos.Subtract(pacScreenPos);
-                if (diff.Length() < gridSize / 2)
-                {
-                    gameTimer.Stop();
-                    MessageBox.Show($"Game Over! Your score: {score}");
-                    Application.Exit();
-                }
-            }
-
-            Invalidate(); // request redraw.
+        public void OnKeyDown(object sender, KeyEventArgs e)
+        {
+            // Always update the buffered nextDirection.
+            if (e.KeyCode == Keys.Up)
+                nextDirection = new Point(0, -1);
+            else if (e.KeyCode == Keys.Down)
+                nextDirection = new Point(0, 1);
+            else if (e.KeyCode == Keys.Left)
+                nextDirection = new Point(-1, 0);
+            else if (e.KeyCode == Keys.Right)
+                nextDirection = new Point(1, 0);
         }
 
         // Update Pac-Man's position: move smoothly from current cell center to target cell center.
-        private void UpdatePacMan()
+        public void UpdatePacMan()
         {
             if (!pacTarget.HasValue)
             {
@@ -331,9 +396,15 @@ namespace PacManWindowsForms
                         if (maze[pacGridPos.Y, pacGridPos.X] == 2)
                         {
                             maze[pacGridPos.Y, pacGridPos.X] = 0;
+
+                            soundPlayer.Play();
+
                             score += 10; // Increase score by 10 for each dot.
+
+                            totalDots--;
+
                             // Check if all dots are eaten.
-                            if (IsAllDotsEaten())
+                            if (totalDots == 0)
                             {
                                 gameTimer.Stop();
                                 MessageBox.Show($"You Win! Your score: {score}");
@@ -358,88 +429,43 @@ namespace PacManWindowsForms
             }
         }
 
-        // Check if all dots are eaten.
-        private bool IsAllDotsEaten()
+        // The GameLoop is called every timer tick. It updates positions using smooth animations.
+        public void GameLoop(object sender, EventArgs e)
         {
-            for (int i = 0; i < rows; i++)
+            // Update Pac-Man's movement.
+            UpdatePacMan();
+
+            // Update ghosts.
+            foreach (var ghost in ghosts)
             {
-                for (int j = 0; j < cols; j++)
+                ghost.UpdateGhost(this);
+            }
+
+            // Check collision: if Pac-Man and any ghost are within a threshold distance.
+            foreach (var ghost in ghosts)
+            {
+                PointF diff = ghost.ScreenPos.Subtract(pacScreenPos);
+                if (diff.Length() < gridSize / 2)
                 {
-                    if (maze[i, j] == 2)
-                    {
-                        return false;
-                    }
+                    SoundPlayer soundPlayer = new SoundPlayer("death.wav");
+                    soundPlayer.Play();
+                    gameTimer.Stop();
+                    MessageBox.Show($"Game Over! Your score: {score}");
+                    Application.Exit();
                 }
             }
-            return true;
+
+            Invalidate(); // request redraw.
         }
 
-        // Update a ghost's position with smoothing and choose its next move based on the shortest path.
-        private void UpdateGhost(Ghost ghost)
-        {
-            Point? nextStep = GetNextStep(ghost.GridPos, pacGridPos);
-            ghost.Target = nextStep.HasValue ? nextStep : ghost.GridPos;
 
-            if (ghost.Target.HasValue)
-            {
-                if ((ghost.GridPos.X == 0 && ghost.Target.Value.X == cols - 1) || (ghost.GridPos.X == cols - 1 && ghost.Target.Value.X == 0) || (ghost.GridPos.Y == 0 && ghost.Target.Value.Y == rows - 1) || (ghost.GridPos.Y == rows - 1 && ghost.Target.Value.Y == 0))
-                {
-                    if (maze[ghost.Target.Value.Y, ghost.Target.Value.X] != 1)
-                        ghost.ghostTeleport = true;
-                }
-                else
-                {
-                    ghost.ghostTeleport = false;
-                }
 
-                if (!ghost.ghostTeleport)
-                {
-                    // Move towards the target cell.
-
-                    PointF targetCenter = GetCellCenter(ghost.Target.Value);
-                    PointF diff = new PointF(targetCenter.X - ghost.ScreenPos.X, targetCenter.Y - ghost.ScreenPos.Y);
-                    float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
-                    if (distance < ghostSpeed)
-                    {
-                        // Reached the next grid cell.
-                        ghost.ScreenPos = targetCenter;
-                        ghost.GridPos = ghost.Target.Value;
-                        ghost.Target = null; // Trigger recalculation on next update.
-                    }
-                    else
-                    {
-                        float vx = diff.X / distance;
-                        float vy = diff.Y / distance;
-                        ghost.ScreenPos = new PointF(ghost.ScreenPos.X + vx * ghostSpeed, ghost.ScreenPos.Y + vy * ghostSpeed);
-                    }
-                }
-                else
-                {
-                    ghost.ScreenPos = GetCellCenter(ghost.Target.Value);
-                    ghost.GridPos = ghost.Target.Value;
-                    Point? nextStep1 = GetNextStep(ghost.GridPos, pacGridPos);
-                    ghost.Target = nextStep1.HasValue ? nextStep1 : ghost.GridPos;
-                }
-            }
-        }
 
         // Handle key presses to set Pac-Man's target cell.
         // Pac-Man moves one cell at a time. The move is initiated only if the next cell in that direction is not a wall.
 
-        private Point currentDirection = new Point(0, 0);
-        private Point nextDirection = new Point(0, 0);
-        private void OnKeyDown(object sender, KeyEventArgs e)
-        {
-            // Always update the buffered nextDirection.
-            if (e.KeyCode == Keys.Up)
-                nextDirection = new Point(0, -1);
-            else if (e.KeyCode == Keys.Down)
-                nextDirection = new Point(0, 1);
-            else if (e.KeyCode == Keys.Left)
-                nextDirection = new Point(-1, 0);
-            else if (e.KeyCode == Keys.Right)
-                nextDirection = new Point(1, 0);
-        }
+
+
 
         // Render the maze, Pac-Man, and ghosts.
         protected override void OnPaint(PaintEventArgs e)
@@ -469,42 +495,61 @@ namespace PacManWindowsForms
 
             // Draw Pac-Man as an orange circle.
             Rectangle pacRect = new Rectangle((int)(pacScreenPos.X - gridSize / 2), (int)(pacScreenPos.Y - gridSize / 2), gridSize, gridSize);
-            g.FillEllipse(Brushes.Orange, pacRect);
+
+            if (currentDirection.X == 1)
+            {
+                using (Bitmap bmp = new Bitmap("pacman_right.png"))
+                {
+                    g.DrawImage(bmp, pacRect);
+                }
+            }
+            else if (currentDirection.X == -1)
+            {
+                using (Bitmap bmp = new Bitmap("pacman_left.png"))
+                {
+                    g.DrawImage(bmp, pacRect);
+                }
+            }
+            else if (currentDirection.Y == 1)
+            {
+                using (Bitmap bmp = new Bitmap("pacman_down.png"))
+                {
+                    g.DrawImage(bmp, pacRect);
+                }
+            }
+            else if (currentDirection.Y == -1)
+            {
+                using (Bitmap bmp = new Bitmap("pacman_up.png"))
+                {
+                    g.DrawImage(bmp, pacRect);
+                }
+            }
+            else
+            {
+                using (Bitmap bmp = new Bitmap("pacman_right.png"))
+                {
+                    g.DrawImage(bmp, pacRect);
+                }
+            }
 
             // Draw ghosts as red circles.
             foreach (var ghost in ghosts)
             {
                 Rectangle ghostRect = new Rectangle((int)(ghost.ScreenPos.X - gridSize / 2), (int)(ghost.ScreenPos.Y - gridSize / 2), gridSize, gridSize);
-                g.FillEllipse(Brushes.Red, ghostRect);
+
+                using (Bitmap bmp = new Bitmap("ghost.png"))
+                {
+                    g.DrawImage(bmp, ghostRect);
+                }
             }
 
             // Draw the score.
             g.DrawString($"Score: {score}", new Font("Arial", 16), Brushes.White, new PointF(10, 10));
         }
 
-        private int updateX(int cx, int dir)
-        {
-            if (dir == 0)
-                return cx;
-            if (dir == 1 && cx == cols - 1)
-                return 0;
-            if (dir == -1 && cx == 0)
-                return cols - 1;
-            return cx + dir;
-        }
 
-        private int updateY(int cy, int dir)
-        {
-            if (dir == 0)
-                return cy;
-            if (dir == 1 && cy == rows - 1)
-                return 0;
-            if (dir == -1 && cy == 0)
-                return rows - 1;
-            return cy + dir;
-        }
 
-        private void InitializeComponent()
+        public void InitializeComponent()
         {
             this.SuspendLayout();
             // 
