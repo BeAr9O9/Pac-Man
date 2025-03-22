@@ -60,16 +60,14 @@ namespace PacManWindowsForms
 
                     if (!this.ghostTeleport)
                     {
-                        // Move towards the target cell.
                         PointF targetCenter = form.GetCellCenter(this.Target.Value);
                         PointF diff = new PointF(targetCenter.X - this.ScreenPos.X, targetCenter.Y - this.ScreenPos.Y);
                         float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
                         if (distance < ghostSpeed)
                         {
-                            // Reached the next grid cell.
                             this.ScreenPos = targetCenter;
                             this.GridPos = this.Target.Value;
-                            this.Target = null; // Trigger recalculation on next update.
+                            this.Target = null;
                         }
                         else
                         {
