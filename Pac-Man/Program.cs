@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Pac_Man;
+using System;
 using System.Windows.Forms;
 
 namespace PacManWindowsForms
@@ -10,7 +11,7 @@ namespace PacManWindowsForms
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new PacManForm());
+            Application.Run(new BeforeGame());
         }
     }
 }

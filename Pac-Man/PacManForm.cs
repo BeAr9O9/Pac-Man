@@ -102,7 +102,7 @@ namespace PacManWindowsForms
 
         public PacManForm()
         {
-            InitializeComponent();
+            InitComponent();
 
             this.ClientSize = new Size(cols * gridSize, rows * gridSize);
             this.DoubleBuffered = true;
@@ -495,14 +495,13 @@ namespace PacManWindowsForms
 
 
 
-        void InitializeComponent()
+        void InitComponent()
         {
             this.SuspendLayout();
             this.BackColor = System.Drawing.Color.Black;
             this.ClientSize = new System.Drawing.Size(800, 387);
             this.Name = "PacManForm";
             this.ResumeLayout(false);
-
         }
     }
 
