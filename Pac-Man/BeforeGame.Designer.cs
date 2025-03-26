@@ -160,7 +160,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackgroundImage = global::Pac_Man.Properties.Resources.pacman_bg1;
+            this.BackgroundImage = global::Pac_Man.Properties.Resources.pacman_bg;
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
             this.ClientSize = new System.Drawing.Size(750, 501);
             this.Controls.Add(this.panel3);

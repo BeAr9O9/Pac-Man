@@ -65,18 +65,18 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Resources.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-    </Compile>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
@@ -86,9 +86,84 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <None Include="bin\Debug\ghost.png" />
+  </ItemGroup>
   <ItemGroup>
     <None Include="bin\Debug\pacman_bg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\ghost-nf.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman_down.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman_left.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman_right.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman_up.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman-nf-down.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman-nf-left.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman-nf-right.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\pacman-nf-up.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\death.wav" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="bin\Debug\eat.wav" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <None Include="Assets\ghost.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\ghost-nf.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman_bg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman_down.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman_left.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman_right.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman_up.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman-nf-down.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman-nf-left.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman-nf-right.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\pacman-nf-up.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\death.wav" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\eat.wav" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

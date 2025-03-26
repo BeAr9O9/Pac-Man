@@ -11,7 +11,6 @@ namespace PacManWindowsForms
     public partial class PacManForm : Form
     {
         private float cellSize = 30;
-        private float windowAspectRatio;
         private int mazeRows = 25;
         private int mazeColumns = 25;
         private const int MAX_ROWS = 100;
@@ -25,7 +24,7 @@ namespace PacManWindowsForms
         private float pacmanSpeed => 5f * (cellSize / BASE_CELL_SIZE);
         private Point currentMoveDirection = new Point(0, 0);
         private Point nextMoveDirection = new Point(0, 0);
-        private SoundPlayer dotEatingSoundPlayer = new SoundPlayer("eat.wav");
+        private SoundPlayer dotEatingSoundPlayer = new SoundPlayer(global::Pac_Man.Properties.Resources.eat);
         private List<Ghost> ghostsList = new List<Ghost>();
         private Timer gameTimer;
         private Dictionary<Point, int> cellToGraphIndex = new Dictionary<Point, int>();
@@ -36,8 +35,9 @@ namespace PacManWindowsForms
         private const int INFINITY = 1000000;
         private Button pauseGameButton;
 
-        private string pacmanImagePath;
-        private string ghostImagePath;
+        private Bitmap pacmanImage;
+        private Bitmap ghostImage;
+        private bool isFunny = false;
 
         public PacManForm(bool useFunnyAssets)
         {
@@ -45,11 +45,12 @@ namespace PacManWindowsForms
             InitializeComponent();
             this.WindowState = FormWindowState.Maximized;
             this.FormBorderStyle = FormBorderStyle.Sizable;
-            this.Load += (sender, e) => InitializeGame(useFunnyAssets);
+            InitializeGame(useFunnyAssets);
             this.ClientSize = new Size((int)(mazeColumns * cellSize), (int)(mazeRows * cellSize));
             this.DoubleBuffered = true;
             this.Text = "Pac-Man";
             this.ActiveControl = null;
+            isFunny = useFunnyAssets;
         }
 
         private void InitializeGame(bool useFunnyAssets)
@@ -82,14 +83,14 @@ namespace PacManWindowsForms
         {
             if (useFunnyAssets)
             {
-                pacmanImagePath = "pacman_right.png";
-                ghostImagePath = "ghost.png";
-                dotEatingSoundPlayer = new SoundPlayer("eat.wav");
+                pacmanImage = global::Pac_Man.Properties.Resources.pacman_right;
+                ghostImage = global::Pac_Man.Properties.Resources.ghost;
+                dotEatingSoundPlayer = new SoundPlayer(global::Pac_Man.Properties.Resources.eat);
             }
             else
             {
-                pacmanImagePath = "pacman-nf-right.png";
-                ghostImagePath = "ghost-nf.png";
+                pacmanImage = global::Pac_Man.Properties.Resources.pacman_nf_right;
+                ghostImage = global::Pac_Man.Properties.Resources.ghost_nf;
                 dotEatingSoundPlayer = null;
             }
         }
@@ -125,7 +126,6 @@ namespace PacManWindowsForms
         {
             Rectangle screenSize = Screen.PrimaryScreen.WorkingArea;
             this.MinimumSize = new Size(screenSize.Width / 2, screenSize.Height / 2);
-            windowAspectRatio = (float)mazeColumns / mazeRows;
             this.Resize += OnWindowResize;
             UpdateCellSize();
         }
@@ -358,9 +358,6 @@ namespace PacManWindowsForms
                 nextMoveDirection = new Point(-1, 0);
             else if (e.KeyCode == Keys.Right)
                 nextMoveDirection = new Point(1, 0);
-
-            e.Handled = true;
-            e.SuppressKeyPress = true;
         }
 
         private void UpdatePacmanPosition()
@@ -496,7 +493,7 @@ namespace PacManWindowsForms
             {
                 if (dotEatingSoundPlayer != null)
                 {
-                    using (SoundPlayer deathSound = new SoundPlayer("death.wav"))
+                    using (SoundPlayer deathSound = new SoundPlayer(global::Pac_Man.Properties.Resources.death))
                     {
                         deathSound.Play();
                     }
@@ -558,18 +555,31 @@ namespace PacManWindowsForms
                 cellSize
             );
 
-            string pacmanDirectionImage = pacmanImagePath;
-            if (currentMoveDirection.X == -1)
-                pacmanDirectionImage = pacmanImagePath.Replace("right", "left");
-            else if (currentMoveDirection.Y == 1)
-                pacmanDirectionImage = pacmanImagePath.Replace("right", "down");
-            else if (currentMoveDirection.Y == -1)
-                pacmanDirectionImage = pacmanImagePath.Replace("right", "up");
-
-            using (Bitmap bmp = new Bitmap(pacmanDirectionImage))
+            if (isFunny)
             {
-                g.DrawImage(bmp, pacmanRect);
+                if (currentMoveDirection.X == -1)
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_left;
+                else if (currentMoveDirection.Y == 1)
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_down;
+                else if (currentMoveDirection.Y == -1)
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_up;
+                else
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_right;
             }
+            else
+            {
+
+                if (currentMoveDirection.X == -1)
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_nf_left;
+                else if (currentMoveDirection.Y == 1)
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_nf_down;
+                else if (currentMoveDirection.Y == -1)
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_nf_up;
+                else
+                    pacmanImage = global::Pac_Man.Properties.Resources.pacman_nf_right;
+            }
+
+            g.DrawImage(pacmanImage, pacmanRect);
 
             foreach (var ghost in ghostsList)
             {
@@ -580,10 +590,7 @@ namespace PacManWindowsForms
                     cellSize
                 );
 
-                using (Bitmap bmp = new Bitmap(ghostImagePath))
-                {
-                    g.DrawImage(bmp, ghostRect);
-                }
+                g.DrawImage(ghostImage, ghostRect);
             }
 
             float fontSize = Math.Max(12, cellSize / 2);

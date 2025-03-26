@@ -33,7 +33,6 @@ namespace Pac_Man
             try
             {
                 string mazeContent = File.ReadAllText("maze.txt");
-                
                 textBoxMaze.Text = mazeContent;
                 textBoxMaze.Visible = true;
                 saveMazeButton.Visible = true;
