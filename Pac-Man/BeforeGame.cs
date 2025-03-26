@@ -37,9 +37,10 @@ namespace Pac_Man
                 textBoxMaze.Visible = true;
                 saveMazeButton.Visible = true;
             }
-            catch (Exception ex)
+            catch
             {
-                MessageBox.Show("Error reading maze file: " + ex.Message);
+                textBoxMaze.Visible = true;
+                saveMazeButton.Visible = true;
             }
         }
 
@@ -47,14 +48,21 @@ namespace Pac_Man
         {
             try
             {
+                var parts = textBoxMaze.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.None);
+                int size = int.Parse(parts[0]);
+                if (size != 25) 
+                {
+                    MessageBox.Show("Maze size must be 25x25");
+                    return;
+                }
                 File.WriteAllText("maze.txt", textBoxMaze.Text);
                 MessageBox.Show("Maze saved successfully!");
                 textBoxMaze.Visible = false;
                 saveMazeButton.Visible = false;
             }
-            catch (Exception ex)
+            catch
             {
-                MessageBox.Show("Error saving maze file: " + ex.Message);
+                MessageBox.Show("Error saving maze file");
             }
         }
 

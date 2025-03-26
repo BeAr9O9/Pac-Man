@@ -184,7 +184,6 @@ namespace PacManWindowsForms
                 mazeRows = int.Parse(line);
                 line = sr.ReadLine();
                 mazeColumns = int.Parse(line);
-
                 for (int i = 0; i < mazeRows; i++)
                 {
                     line = sr.ReadLine();
