@@ -1,378 +1,434 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
 using System.IO;
+using System.Linq;
 using System.Media;
+using System.Windows.Forms;
 
 namespace PacManWindowsForms
 {
-    public class PacManForm : Form
+    public partial class PacManForm : Form
     {
-        const int gridSize = 30;
-        int rows = 25;
-        int cols = 25;
-        const int rMax = 100;
-        const int cMax = 100;
-        int[,] maze = new int[rMax, cMax];
-        bool pacTeleport = false;
-        Point pacGridPos;
-        PointF pacScreenPos;
-        Point? pacTarget = null;
-        const float pacSpeed = 5f;
-        Point currentDirection = new Point(0, 0);
-        Point nextDirection = new Point(0, 0);
-        SoundPlayer soundPlayer = new SoundPlayer("eat.wav");
-        class Ghost
+        private float cellSize = 30;
+        private float windowAspectRatio;
+        private int mazeRows = 25;
+        private int mazeColumns = 25;
+        private const int MAX_ROWS = 100;
+        private const int MAX_COLUMNS = 100;
+        private int[,] mazeGrid = new int[MAX_ROWS, MAX_COLUMNS];
+        private bool isPacmanTeleporting = false;
+        private Point pacmanGridPosition;
+        private PointF pacmanScreenPosition;
+        private Point? pacmanTargetCell = null;
+        private const float BASE_CELL_SIZE = 30f;
+        private float pacmanSpeed => 5f * (cellSize / BASE_CELL_SIZE);
+        private Point currentMoveDirection = new Point(0, 0);
+        private Point nextMoveDirection = new Point(0, 0);
+        private SoundPlayer dotEatingSoundPlayer = new SoundPlayer("eat.wav");
+        private List<Ghost> ghostsList = new List<Ghost>();
+        private Timer gameTimer;
+        private Dictionary<Point, int> cellToGraphIndex = new Dictionary<Point, int>();
+        private List<Point> graphIndexToCell = new List<Point>();
+        private int[,] pathNextCellMatrix;
+        private int remainingDots = 0;
+        private int playerScore = 0;
+        private const int INFINITY = 1000000;
+        private Button pauseGameButton;
+
+        private string pacmanImagePath;
+        private string ghostImagePath;
+
+        public PacManForm(bool useFunnyAssets)
         {
-            bool ghostTeleport = false;
-            Point GridPos;
-            public PointF ScreenPos;
-            Point? Target;
-            float ghostSpeed = 4f;
-
-            public Ghost(bool ghostTeleport, Point gridPos, PointF screenPos, Point? target, float ghostSpeed)
-            {
-                this.ghostTeleport = ghostTeleport;
-                GridPos = gridPos;
-                ScreenPos = screenPos;
-                Target = target;
-                this.ghostSpeed = ghostSpeed;
-            }
-
-            public void UpdateGhost(PacManForm form)
-            {
-                Point? nextStep = form.GetNextStep(this.GridPos, form.pacGridPos);
-                this.Target = nextStep.HasValue ? nextStep : this.GridPos;
-
-                if (this.Target.HasValue)
-                {
-                    if ((this.GridPos.X == 0 && this.Target.Value.X == form.cols - 1) || (this.GridPos.X == form.cols - 1 && this.Target.Value.X == 0) || (this.GridPos.Y == 0 && this.Target.Value.Y == form.rows - 1) || (this.GridPos.Y == form.rows - 1 && this.Target.Value.Y == 0))
-                    {
-                        if (form.maze[this.Target.Value.Y, this.Target.Value.X] != 1)
-                            this.ghostTeleport = true;
-                    }
-                    else
-                    {
-                        this.ghostTeleport = false;
-                    }
-
-                    if (!this.ghostTeleport)
-                    {
-                        PointF targetCenter = form.GetCellCenter(this.Target.Value);
-                        PointF diff = new PointF(targetCenter.X - this.ScreenPos.X, targetCenter.Y - this.ScreenPos.Y);
-                        float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
-                        if (distance < ghostSpeed)
-                        {
-                            this.ScreenPos = targetCenter;
-                            this.GridPos = this.Target.Value;
-                            this.Target = null;
-                        }
-                        else
-                        {
-                            float vx = diff.X / distance;
-                            float vy = diff.Y / distance;
-                            this.ScreenPos = new PointF(this.ScreenPos.X + vx * ghostSpeed, this.ScreenPos.Y + vy * ghostSpeed);
-                        }
-                    }
-                    else
-                    {
-                        this.ScreenPos = form.GetCellCenter(this.Target.Value);
-                        this.GridPos = this.Target.Value;
-                        Point? nextStep1 = form.GetNextStep(this.GridPos, form.pacGridPos);
-                        this.Target = nextStep1.HasValue ? nextStep1 : this.GridPos;
-                    }
-                }
-            }
-        }
-        List<Ghost> ghosts = new List<Ghost>();
-        Timer gameTimer;
-        Dictionary<Point, int> cellToIndex = new Dictionary<Point, int>();
-        List<Point> indexToCell = new List<Point>();
-        int[,] nextMatrix;
-
-        int totalDots = 0;
-
-
-        private int score = 0;
-
-
-        const int INF = 1000000;
-
-        public PacManForm()
-        {
-            InitComponent();
-
-            this.ClientSize = new Size(cols * gridSize, rows * gridSize);
+            this.KeyPreview = true;
+            InitializeComponent();
+            this.WindowState = FormWindowState.Maximized;
+            this.FormBorderStyle = FormBorderStyle.Sizable;
+            this.Load += (sender, e) => InitializeGame(useFunnyAssets);
+            this.ClientSize = new Size((int)(mazeColumns * cellSize), (int)(mazeRows * cellSize));
             this.DoubleBuffered = true;
             this.Text = "Pac-Man";
+            this.ActiveControl = null;
+        }
 
-            InitializeMaze();
+        private void InitializeGame(bool useFunnyAssets)
+        {
+            SetupResponsiveWindow();
+            LoadMazeFromFile();
             BuildGraphAndComputePaths();
+            UpdateCellSize();
+            pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
 
-            pacScreenPos = GetCellCenter(pacGridPos);
-
+            foreach (var ghost in ghostsList)
+            {
+                ghost.ScreenPos = GetCellCenterPosition(ghost.GridPos);
+            }
 
             gameTimer = new Timer();
             gameTimer.Interval = 20;
             gameTimer.Tick += GameLoop;
             gameTimer.Start();
 
+            SetupPauseButton();
             this.KeyDown += OnKeyDown;
+            this.ActiveControl = null;
+            this.Invalidate();
+
+            LoadGameAssets(useFunnyAssets);
         }
 
-
-        void InitializeMaze()
+        private void LoadGameAssets(bool useFunnyAssets)
         {
-            StreamReader sr = new StreamReader(@"maze.txt");
-            string line;
-            line = sr.ReadLine();
-            rows = int.Parse(line);
-            line = sr.ReadLine();
-            cols = int.Parse(line);
-
-
-            for (int i = 0; i < rows; i++)
+            if (useFunnyAssets)
             {
+                pacmanImagePath = "pacman_right.png";
+                ghostImagePath = "ghost.png";
+                dotEatingSoundPlayer = new SoundPlayer("eat.wav");
+            }
+            else
+            {
+                pacmanImagePath = "pacman-nf-right.png";
+                ghostImagePath = "ghost-nf.png";
+                dotEatingSoundPlayer = null;
+            }
+        }
+
+        private void SetupPauseButton()
+        {
+            pauseGameButton = new Button();
+            pauseGameButton.Text = "Pause";
+            pauseGameButton.Size = new Size(80, 40);
+            pauseGameButton.ForeColor = Color.White;
+            pauseGameButton.BackColor = Color.DarkBlue;
+            pauseGameButton.Location = new Point(this.ClientSize.Width - 100, 10);
+            pauseGameButton.TabStop = false;
+
+            pauseGameButton.Click += (sender, eventArgs) =>
+            {
+                if (gameTimer.Enabled)
+                {
+                    gameTimer.Stop();
+                    pauseGameButton.Text = "Resume";
+                }
+                else
+                {
+                    gameTimer.Start();
+                    pauseGameButton.Text = "Pause";
+                }
+                this.Focus();
+            };
+            this.Controls.Add(pauseGameButton);
+        }
+
+        private void SetupResponsiveWindow()
+        {
+            Rectangle screenSize = Screen.PrimaryScreen.WorkingArea;
+            this.MinimumSize = new Size(screenSize.Width / 2, screenSize.Height / 2);
+            windowAspectRatio = (float)mazeColumns / mazeRows;
+            this.Resize += OnWindowResize;
+            UpdateCellSize();
+        }
+
+        private void OnWindowResize(object sender, EventArgs e)
+        {
+            UpdateCellSize();
+
+            if (pacmanGridPosition != null)
+            {
+                pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
+            }
+
+            foreach (var ghost in ghostsList)
+            {
+                ghost.ScreenPos = GetCellCenterPosition(ghost.GridPos);
+            }
+
+            Invalidate();
+        }
+
+        private void UpdateCellSize()
+        {
+            float horizontalCellSize = (float)this.ClientSize.Width / mazeColumns;
+            float verticalCellSize = (float)this.ClientSize.Height / mazeRows;
+            cellSize = Math.Min(horizontalCellSize, verticalCellSize);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.Up:
+                    nextMoveDirection = new Point(0, -1);
+                    return true;
+                case Keys.Down:
+                    nextMoveDirection = new Point(0, 1);
+                    return true;
+                case Keys.Left:
+                    nextMoveDirection = new Point(-1, 0);
+                    return true;
+                case Keys.Right:
+                    nextMoveDirection = new Point(1, 0);
+                    return true;
+                default:
+                    return base.ProcessCmdKey(ref msg, keyData);
+            }
+        }
+
+        private void LoadMazeFromFile()
+        {
+            using (StreamReader sr = new StreamReader(@"maze.txt"))
+            {
+                string line;
                 line = sr.ReadLine();
-                for (int j = 0; j < cols; j++)
+                mazeRows = int.Parse(line);
+                line = sr.ReadLine();
+                mazeColumns = int.Parse(line);
+
+                for (int i = 0; i < mazeRows; i++)
                 {
-                    if (line[j] == '0')
-                        maze[i, j] = 0;
-                    else if (line[j] == '#')
-                        maze[i, j] = 1;
-                    else if (line[j] == '.')
+                    line = sr.ReadLine();
+                    for (int j = 0; j < mazeColumns; j++)
                     {
-                        maze[i, j] = 2;
-                        totalDots++;
-                    }
-                    else if (line[j] == 'P')
-                    {
-                        maze[i, j] = 0;
-                        pacGridPos = new Point(j, i);
-                        pacScreenPos = GetCellCenter(pacGridPos);
-                    }
-                    else if (line[j] == 'G')
-                    {
-                        maze[i, j] = 0;
-
-                        Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenter(new Point(j, i)), null, 4f);
-
-                        ghosts.Add(ghost);
-                    }
-                }
-            }
-        }
-
-
-        void BuildGraphAndComputePaths()
-        {
-            cellToIndex.Clear();
-            indexToCell.Clear();
-            for (int i = 0; i < rows; i++)
-            {
-                for (int j = 0; j < cols; j++)
-                {
-                    if (maze[i, j] != 1)
-                    {
-                        Point cell = new Point(j, i);
-                        cellToIndex[cell] = indexToCell.Count;
-                        indexToCell.Add(cell);
-                    }
-                }
-            }
-            int n = indexToCell.Count;
-            int[,] dist = new int[n, n];
-            nextMatrix = new int[n, n];
-
-
-            for (int i = 0; i < n; i++)
-            {
-                for (int j = 0; j < n; j++)
-                {
-                    if (i == j)
-                    {
-                        dist[i, j] = 0;
-                        nextMatrix[i, j] = j;
-                    }
-                    else
-                    {
-                        dist[i, j] = INF;
-                        nextMatrix[i, j] = -1;
-                    }
-                }
-            }
-
-            int[] dx = { 0, 0, -1, 1 };
-            int[] dy = { -1, 1, 0, 0 };
-            foreach (var kv in cellToIndex)
-            {
-                Point cell = kv.Key;
-                int iIdx = kv.Value;
-                for (int dir = 0; dir < 4; dir++)
-                {
-                    int newX, newY;
-                    if (cell.X == 0 && dx[dir] < 0)
-                    {
-                        newX = cols - 1;
-                    }
-                    else if (cell.X == cols - 1 && dx[dir] > 0)
-                    {
-                        newX = 0;
-                    }
-                    else
-                    {
-                        newX = cell.X + dx[dir];
-                    }
-                    if (cell.Y == 0 && dy[dir] < 0)
-                    {
-                        newY = rows - 1;
-                    }
-                    else if (cell.Y == rows - 1 && dy[dir] > 0)
-                    {
-                        newY = 0;
-                    }
-                    else
-                    {
-                        newY = cell.Y + dy[dir];
-                    }
-
-                    Point neighbor = new Point(newX, newY);
-                    if (cellToIndex.ContainsKey(neighbor))
-                    {
-                        int jIdx = cellToIndex[neighbor];
-                        dist[iIdx, jIdx] = 1;
-                        nextMatrix[iIdx, jIdx] = jIdx;
-                    }
-                }
-            }
-
-            for (int k = 0; k < n; k++)
-            {
-                for (int i = 0; i < n; i++)
-                {
-                    for (int j = 0; j < n; j++)
-                    {
-                        if (dist[i, k] + dist[k, j] < dist[i, j])
+                        if (line[j] == '0')
+                            mazeGrid[i, j] = 0;
+                        else if (line[j] == '#')
+                            mazeGrid[i, j] = 1;
+                        else if (line[j] == '.')
                         {
-                            dist[i, j] = dist[i, k] + dist[k, j];
-                            nextMatrix[i, j] = nextMatrix[i, k];
+                            mazeGrid[i, j] = 2;
+                            remainingDots++;
+                        }
+                        else if (line[j] == 'P')
+                        {
+                            mazeGrid[i, j] = 0;
+                            pacmanGridPosition = new Point(j, i);
+                            pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
+                        }
+                        else if (line[j] == 'G')
+                        {
+                            mazeGrid[i, j] = 0;
+                            Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
+                            ghostsList.Add(ghost);
                         }
                     }
                 }
             }
         }
 
-
-        Point? GetNextStep(Point from, Point to)
+        private void BuildGraphAndComputePaths()
         {
-            if (!cellToIndex.ContainsKey(from) || !cellToIndex.ContainsKey(to))
-                return null;
-            int i = cellToIndex[from];
-            int j = cellToIndex[to];
-            if (nextMatrix[i, j] == -1)
-                return null;
-            int nextIndex = nextMatrix[i, j];
-            return indexToCell[nextIndex];
-        }
-
-        PointF GetCellCenter(Point cell)
-        {
-            return new PointF(cell.X * gridSize + gridSize / 2, cell.Y * gridSize + gridSize / 2);
-        }
-        int updateX(int cx, int dir)
-        {
-            if (dir == 0)
-                return cx;
-            if (dir == 1 && cx == cols - 1)
-                return 0;
-            if (dir == -1 && cx == 0)
-                return cols - 1;
-            return cx + dir;
-        }
-
-        int updateY(int cy, int dir)
-        {
-            if (dir == 0)
-                return cy;
-            if (dir == 1 && cy == rows - 1)
-                return 0;
-            if (dir == -1 && cy == 0)
-                return rows - 1;
-            return cy + dir;
-        }
-
-        void OnKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Up)
-                nextDirection = new Point(0, -1);
-            else if (e.KeyCode == Keys.Down)
-                nextDirection = new Point(0, 1);
-            else if (e.KeyCode == Keys.Left)
-                nextDirection = new Point(-1, 0);
-            else if (e.KeyCode == Keys.Right)
-                nextDirection = new Point(1, 0);
-        }
-
-
-        void UpdatePacMan()
-        {
-            if (!pacTarget.HasValue)
+            cellToGraphIndex.Clear();
+            graphIndexToCell.Clear();
+            for (int i = 0; i < mazeRows; i++)
             {
-                Point desiredCell = new Point(updateX(pacGridPos.X, nextDirection.X), updateY(pacGridPos.Y, nextDirection.Y));
-                if (maze[desiredCell.Y, desiredCell.X] != 1)
+                for (int j = 0; j < mazeColumns; j++)
                 {
-
-                    currentDirection = nextDirection;
+                    if (mazeGrid[i, j] != 1)
+                    {
+                        Point cell = new Point(j, i);
+                        cellToGraphIndex[cell] = graphIndexToCell.Count;
+                        graphIndexToCell.Add(cell);
+                    }
                 }
-                Point newCell = new Point(updateX(pacGridPos.X, currentDirection.X), updateY(pacGridPos.Y, currentDirection.Y));
-                if ((pacGridPos.X == 0 && currentDirection.X == -1) || (pacGridPos.X == cols - 1 && currentDirection.X == 1) || (pacGridPos.Y == 0 && currentDirection.Y == -1) || (pacGridPos.Y == rows - 1 && currentDirection.Y == 1))
-                {
-                    if (maze[newCell.Y, newCell.X] != 1)
-                        pacTeleport = true;
-                }
-                else
-                {
-                    pacTeleport = false;
-                }
+            }
+            int nodeCount = graphIndexToCell.Count;
+            int[,] distanceMatrix = new int[nodeCount, nodeCount];
+            pathNextCellMatrix = new int[nodeCount, nodeCount];
 
-
-                if (newCell.X >= 0 && newCell.X < cols && newCell.Y >= 0 && newCell.Y < rows && maze[newCell.Y, newCell.X] != 1)
+            for (int i = 0; i < nodeCount; i++)
+            {
+                for (int j = 0; j < nodeCount; j++)
                 {
-                    pacTarget = newCell;
+                    if (i == j)
+                    {
+                        distanceMatrix[i, j] = 0;
+                        pathNextCellMatrix[i, j] = j;
+                    }
+                    else
+                    {
+                        distanceMatrix[i, j] = INFINITY;
+                        pathNextCellMatrix[i, j] = -1;
+                    }
                 }
             }
 
-            if (pacTarget.HasValue)
+            int[] dx = { 0, 0, -1, 1 };
+            int[] dy = { -1, 1, 0, 0 };
+            foreach (var kv in cellToGraphIndex)
             {
-
-                PointF targetCenter = GetCellCenter(pacTarget.Value);
-                if (!pacTeleport)
+                Point cell = kv.Key;
+                int sourceIndex = kv.Value;
+                for (int dir = 0; dir < 4; dir++)
                 {
+                    int newX, newY;
+                    if (cell.X == 0 && dx[dir] < 0)
+                        newX = mazeColumns - 1;
+                    else if (cell.X == mazeColumns - 1 && dx[dir] > 0)
+                        newX = 0;
+                    else
+                        newX = cell.X + dx[dir];
 
-                    PointF diff = new PointF(targetCenter.X - pacScreenPos.X, targetCenter.Y - pacScreenPos.Y);
-                    float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
-                    if (distance < pacSpeed)
+                    if (cell.Y == 0 && dy[dir] < 0)
+                        newY = mazeRows - 1;
+                    else if (cell.Y == mazeRows - 1 && dy[dir] > 0)
+                        newY = 0;
+                    else
+                        newY = cell.Y + dy[dir];
+
+                    Point neighbor = new Point(newX, newY);
+                    if (cellToGraphIndex.ContainsKey(neighbor))
                     {
+                        int targetIndex = cellToGraphIndex[neighbor];
+                        distanceMatrix[sourceIndex, targetIndex] = 1;
+                        pathNextCellMatrix[sourceIndex, targetIndex] = targetIndex;
+                    }
+                }
+            }
 
-                        pacScreenPos = targetCenter;
-                        pacGridPos = pacTarget.Value;
-                        pacTarget = null;
-                        if (maze[pacGridPos.Y, pacGridPos.X] == 2)
+            // Floyd-Warshall algorithm
+            for (int k = 0; k < nodeCount; k++)
+            {
+                for (int i = 0; i < nodeCount; i++)
+                {
+                    for (int j = 0; j < nodeCount; j++)
+                    {
+                        if (distanceMatrix[i, k] + distanceMatrix[k, j] < distanceMatrix[i, j])
                         {
-                            maze[pacGridPos.Y, pacGridPos.X] = 0;
+                            distanceMatrix[i, j] = distanceMatrix[i, k] + distanceMatrix[k, j];
+                            pathNextCellMatrix[i, j] = pathNextCellMatrix[i, k];
+                        }
+                    }
+                }
+            }
+        }
 
-                            soundPlayer.Play();
+        private Point? GetNextCellInPath(Point from, Point to)
+        {
+            if (!cellToGraphIndex.ContainsKey(from) || !cellToGraphIndex.ContainsKey(to))
+                return null;
+            int sourceIndex = cellToGraphIndex[from];
+            int targetIndex = cellToGraphIndex[to];
+            if (pathNextCellMatrix[sourceIndex, targetIndex] == -1)
+                return null;
+            int nextCellIndex = pathNextCellMatrix[sourceIndex, targetIndex];
+            return graphIndexToCell[nextCellIndex];
+        }
 
-                            score += 10;
+        private PointF GetCellCenterPosition(Point cell)
+        {
+            float offsetX = (ClientSize.Width - mazeColumns * cellSize) / 2;
+            float offsetY = (ClientSize.Height - mazeRows * cellSize) / 2;
 
-                            totalDots--;
+            return new PointF(
+                offsetX + cell.X * cellSize + cellSize / 2,
+                offsetY + cell.Y * cellSize + cellSize / 2
+            );
+        }
 
-                            if (totalDots == 0)
+        private int CalculateNextXPosition(int currentX, int direction)
+        {
+            if (direction == 0)
+                return currentX;
+            if (direction == 1 && currentX == mazeColumns - 1)
+                return 0;
+            if (direction == -1 && currentX == 0)
+                return mazeColumns - 1;
+            return currentX + direction;
+        }
+
+        private int CalculateNextYPosition(int currentY, int direction)
+        {
+            if (direction == 0)
+                return currentY;
+            if (direction == 1 && currentY == mazeRows - 1)
+                return 0;
+            if (direction == -1 && currentY == 0)
+                return mazeRows - 1;
+            return currentY + direction;
+        }
+
+        private void OnKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Up)
+                nextMoveDirection = new Point(0, -1);
+            else if (e.KeyCode == Keys.Down)
+                nextMoveDirection = new Point(0, 1);
+            else if (e.KeyCode == Keys.Left)
+                nextMoveDirection = new Point(-1, 0);
+            else if (e.KeyCode == Keys.Right)
+                nextMoveDirection = new Point(1, 0);
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        private void UpdatePacmanPosition()
+        {
+            if (!pacmanTargetCell.HasValue)
+            {
+                Point desiredCell = new Point(
+                    CalculateNextXPosition(pacmanGridPosition.X, nextMoveDirection.X),
+                    CalculateNextYPosition(pacmanGridPosition.Y, nextMoveDirection.Y)
+                );
+
+                if (mazeGrid[desiredCell.Y, desiredCell.X] != 1)
+                {
+                    currentMoveDirection = nextMoveDirection;
+                }
+
+                Point newCell = new Point(
+                    CalculateNextXPosition(pacmanGridPosition.X, currentMoveDirection.X),
+                    CalculateNextYPosition(pacmanGridPosition.Y, currentMoveDirection.Y)
+                );
+
+                if ((pacmanGridPosition.X == 0 && currentMoveDirection.X == -1) ||
+                    (pacmanGridPosition.X == mazeColumns - 1 && currentMoveDirection.X == 1) ||
+                    (pacmanGridPosition.Y == 0 && currentMoveDirection.Y == -1) ||
+                    (pacmanGridPosition.Y == mazeRows - 1 && currentMoveDirection.Y == 1))
+                {
+                    if (mazeGrid[newCell.Y, newCell.X] != 1)
+                        isPacmanTeleporting = true;
+                }
+                else
+                {
+                    isPacmanTeleporting = false;
+                }
+
+                if (newCell.X >= 0 && newCell.X < mazeColumns && newCell.Y >= 0 && newCell.Y < mazeRows && mazeGrid[newCell.Y, newCell.X] != 1)
+                {
+                    pacmanTargetCell = newCell;
+                }
+            }
+
+            if (pacmanTargetCell.HasValue)
+            {
+                PointF targetCenter = GetCellCenterPosition(pacmanTargetCell.Value);
+                if (!isPacmanTeleporting)
+                {
+                    PointF diff = new PointF(targetCenter.X - pacmanScreenPosition.X, targetCenter.Y - pacmanScreenPosition.Y);
+                    float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
+                    float currentPacmanSpeed = pacmanSpeed;
+
+                    if (distance < currentPacmanSpeed)
+                    {
+                        pacmanScreenPosition = targetCenter;
+                        pacmanGridPosition = pacmanTargetCell.Value;
+                        pacmanTargetCell = null;
+                        if (mazeGrid[pacmanGridPosition.Y, pacmanGridPosition.X] == 2)
+                        {
+                            mazeGrid[pacmanGridPosition.Y, pacmanGridPosition.X] = 0;
+                            if (dotEatingSoundPlayer != null)
+                            {
+                                dotEatingSoundPlayer.Play();
+                            }
+                            playerScore += 10;
+                            remainingDots--;
+
+                            if (remainingDots == 0)
                             {
                                 gameTimer.Stop();
-                                MessageBox.Show($"You Win! Your score: {score}");
+                                MessageBox.Show($"You Win! Your score: {playerScore}");
                                 Application.Exit();
                             }
                         }
@@ -381,38 +437,78 @@ namespace PacManWindowsForms
                     {
                         float vx = diff.X / distance;
                         float vy = diff.Y / distance;
-                        pacScreenPos = new PointF(pacScreenPos.X + vx * pacSpeed, pacScreenPos.Y + vy * pacSpeed);
+                        pacmanScreenPosition = new PointF(
+                            pacmanScreenPosition.X + vx * currentPacmanSpeed,
+                            pacmanScreenPosition.Y + vy * currentPacmanSpeed
+                        );
                     }
                 }
                 else
                 {
-                    pacScreenPos = targetCenter;
-                    pacGridPos = pacTarget.Value;
-                    pacTarget = null;
+                    pacmanScreenPosition = targetCenter;
+                    pacmanGridPosition = pacmanTargetCell.Value;
+                    pacmanTargetCell = null;
                 }
             }
         }
 
-        void GameLoop(object sender, EventArgs e)
+        private void RestartGame()
         {
-            UpdatePacMan();
+            playerScore = 0;
+            mazeGrid = new int[MAX_ROWS, MAX_COLUMNS];
+            ghostsList.Clear();
+            cellToGraphIndex.Clear();
+            graphIndexToCell.Clear();
+            currentMoveDirection = new Point(0, 0);
+            nextMoveDirection = new Point(0, 0);
+            pacmanTargetCell = null;
+            isPacmanTeleporting = false;
+            remainingDots = 0;
 
-            foreach (var ghost in ghosts)
+            LoadMazeFromFile();
+            BuildGraphAndComputePaths();
+            pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
+            gameTimer.Start();
+            this.ActiveControl = null;
+        }
+
+        private void GameLoop(object sender, EventArgs e)
+        {
+            UpdatePacmanPosition();
+
+            foreach (var ghost in ghostsList)
             {
-                ghost.UpdateGhost(this);
+                ghost.Update(this);
             }
 
-            foreach (var ghost in ghosts)
+            bool isGameOver = false;
+            foreach (var ghost in ghostsList)
             {
-                PointF diff = ghost.ScreenPos.Subtract(pacScreenPos);
-                if (diff.Length() < gridSize / 2)
+                PointF diff = ghost.ScreenPos.Subtract(pacmanScreenPosition);
+                if (diff.Length() < cellSize / 2)
                 {
-                    SoundPlayer soundPlayer = new SoundPlayer("death.wav");
-                    soundPlayer.Play();
-                    gameTimer.Stop();
-                    MessageBox.Show($"Game Over! Your score: {score}");
-                    Application.Exit();
+                    isGameOver = true;
+                    break;
                 }
+            }
+
+            if (isGameOver)
+            {
+                if (dotEatingSoundPlayer != null)
+                {
+                    using (SoundPlayer deathSound = new SoundPlayer("death.wav"))
+                    {
+                        deathSound.Play();
+                    }
+                }
+
+                gameTimer.Stop();
+                DialogResult result = MessageBox.Show($"Game Over! Your score: {playerScore}\nDo you want to restart?", "Game Over", MessageBoxButtons.YesNo);
+
+                if (result == DialogResult.Yes)
+                    RestartGame();
+                else
+                    Application.Exit();
             }
 
             Invalidate();
@@ -423,85 +519,163 @@ namespace PacManWindowsForms
             base.OnPaint(e);
             Graphics g = e.Graphics;
 
+            float offsetX = (ClientSize.Width - mazeColumns * cellSize) / 2;
+            float offsetY = (ClientSize.Height - mazeRows * cellSize) / 2;
 
-            for (int i = 0; i < rows; i++)
+            for (int i = 0; i < mazeRows; i++)
             {
-                for (int j = 0; j < cols; j++)
+                for (int j = 0; j < mazeColumns; j++)
                 {
-                    Rectangle cellRect = new Rectangle(j * gridSize, i * gridSize, gridSize, gridSize);
-                    if (maze[i, j] == 1)
+                    RectangleF cellRect = new RectangleF(
+                        offsetX + j * cellSize,
+                        offsetY + i * cellSize,
+                        cellSize,
+                        cellSize
+                    );
+
+                    if (mazeGrid[i, j] == 1)
                     {
                         g.FillRectangle(Brushes.Blue, cellRect);
                     }
-                    else if (maze[i, j] == 2)
+                    else if (mazeGrid[i, j] == 2)
                     {
-                        int dotSize = gridSize / 3;
-                        Rectangle dotRect = new Rectangle(cellRect.X + gridSize / 3, cellRect.Y + gridSize / 3, dotSize, dotSize);
+                        float dotSize = cellSize / 3;
+                        RectangleF dotRect = new RectangleF(
+                            cellRect.X + cellSize / 3,
+                            cellRect.Y + cellSize / 3,
+                            dotSize,
+                            dotSize
+                        );
                         g.FillEllipse(Brushes.Yellow, dotRect);
                     }
                 }
             }
 
-            Rectangle pacRect = new Rectangle((int)(pacScreenPos.X - gridSize / 2), (int)(pacScreenPos.Y - gridSize / 2), gridSize, gridSize);
+            RectangleF pacmanRect = new RectangleF(
+                pacmanScreenPosition.X - cellSize / 2,
+                pacmanScreenPosition.Y - cellSize / 2,
+                cellSize,
+                cellSize
+            );
 
-            if (currentDirection.X == 1)
+            string pacmanDirectionImage = pacmanImagePath;
+            if (currentMoveDirection.X == -1)
+                pacmanDirectionImage = pacmanImagePath.Replace("right", "left");
+            else if (currentMoveDirection.Y == 1)
+                pacmanDirectionImage = pacmanImagePath.Replace("right", "down");
+            else if (currentMoveDirection.Y == -1)
+                pacmanDirectionImage = pacmanImagePath.Replace("right", "up");
+
+            using (Bitmap bmp = new Bitmap(pacmanDirectionImage))
             {
-                using (Bitmap bmp = new Bitmap("pacman_right.png"))
-                {
-                    g.DrawImage(bmp, pacRect);
-                }
-            }
-            else if (currentDirection.X == -1)
-            {
-                using (Bitmap bmp = new Bitmap("pacman_left.png"))
-                {
-                    g.DrawImage(bmp, pacRect);
-                }
-            }
-            else if (currentDirection.Y == 1)
-            {
-                using (Bitmap bmp = new Bitmap("pacman_down.png"))
-                {
-                    g.DrawImage(bmp, pacRect);
-                }
-            }
-            else if (currentDirection.Y == -1)
-            {
-                using (Bitmap bmp = new Bitmap("pacman_up.png"))
-                {
-                    g.DrawImage(bmp, pacRect);
-                }
-            }
-            else
-            {
-                using (Bitmap bmp = new Bitmap("pacman_right.png"))
-                {
-                    g.DrawImage(bmp, pacRect);
-                }
+                g.DrawImage(bmp, pacmanRect);
             }
 
-            foreach (var ghost in ghosts)
+            foreach (var ghost in ghostsList)
             {
-                Rectangle ghostRect = new Rectangle((int)(ghost.ScreenPos.X - gridSize / 2), (int)(ghost.ScreenPos.Y - gridSize / 2), gridSize, gridSize);
+                RectangleF ghostRect = new RectangleF(
+                    ghost.ScreenPos.X - cellSize / 2,
+                    ghost.ScreenPos.Y - cellSize / 2,
+                    cellSize,
+                    cellSize
+                );
 
-                using (Bitmap bmp = new Bitmap("ghost.png"))
+                using (Bitmap bmp = new Bitmap(ghostImagePath))
                 {
                     g.DrawImage(bmp, ghostRect);
                 }
             }
 
-            g.DrawString($"Score: {score}", new Font("Arial", 16), Brushes.White, new PointF(10, 10));
+            float fontSize = Math.Max(12, cellSize / 2);
+            g.DrawString(
+                $"Score: {playerScore}",
+                new Font("Arial", fontSize),
+                Brushes.White,
+                new PointF(10, 10)
+            );
+            pauseGameButton.Location = new Point(this.ClientSize.Width - 100, 10);
         }
 
-
-
-        void InitComponent()
+        private void InitializeComponent()
         {
             this.SuspendLayout();
-            this.BackColor = System.Drawing.Color.Black;
-            this.ClientSize = new System.Drawing.Size(800, 387);
+            this.BackColor = Color.Black;
+            this.ClientSize = new Size(800, 387);
             this.Name = "PacManForm";
             this.ResumeLayout(false);
+        }
+
+        private class Ghost
+        {
+            private bool isTeleporting = false;
+            public Point GridPos;
+            public PointF ScreenPos;
+            private Point? TargetCell;
+            private const float BASE_SPEED = 4f;
+            private const float BASE_CELL_SIZE = 30f;
+
+            public float CalculateSpeed(float currentCellSize) => BASE_SPEED * (currentCellSize / BASE_CELL_SIZE);
+
+            public Ghost(bool isTeleporting, Point gridPos, PointF screenPos, Point? targetCell, float ghostSpeed)
+            {
+                this.isTeleporting = isTeleporting;
+                GridPos = gridPos;
+                ScreenPos = screenPos;
+                TargetCell = targetCell;
+            }
+
+            public void Update(PacManForm form)
+            {
+                Point? nextStep = form.GetNextCellInPath(this.GridPos, form.pacmanGridPosition);
+                this.TargetCell = nextStep.HasValue ? nextStep : this.GridPos;
+
+                if (this.TargetCell.HasValue)
+                {
+                    if ((this.GridPos.X == 0 && this.TargetCell.Value.X == form.mazeColumns - 1) ||
+                        (this.GridPos.X == form.mazeColumns - 1 && this.TargetCell.Value.X == 0) ||
+                        (this.GridPos.Y == 0 && this.TargetCell.Value.Y == form.mazeRows - 1) ||
+                        (this.GridPos.Y == form.mazeRows - 1 && this.TargetCell.Value.Y == 0))
+                    {
+                        if (form.mazeGrid[this.TargetCell.Value.Y, this.TargetCell.Value.X] != 1)
+                            this.isTeleporting = true;
+                    }
+                    else
+                    {
+                        this.isTeleporting = false;
+                    }
+
+                    if (!this.isTeleporting)
+                    {
+                        PointF targetCenter = form.GetCellCenterPosition(this.TargetCell.Value);
+                        PointF diff = new PointF(targetCenter.X - this.ScreenPos.X, targetCenter.Y - this.ScreenPos.Y);
+                        float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
+                        float currentSpeed = CalculateSpeed(form.cellSize);
+
+                        if (distance < currentSpeed)
+                        {
+                            this.ScreenPos = targetCenter;
+                            this.GridPos = this.TargetCell.Value;
+                            this.TargetCell = null;
+                        }
+                        else
+                        {
+                            float vx = diff.X / distance;
+                            float vy = diff.Y / distance;
+                            this.ScreenPos = new PointF(
+                                this.ScreenPos.X + vx * currentSpeed,
+                                this.ScreenPos.Y + vy * currentSpeed
+                            );
+                        }
+                    }
+                    else
+                    {
+                        this.ScreenPos = form.GetCellCenterPosition(this.TargetCell.Value);
+                        this.GridPos = this.TargetCell.Value;
+                        Point? nextStep1 = form.GetNextCellInPath(this.GridPos, form.pacmanGridPosition);
+                        this.TargetCell = nextStep1.HasValue ? nextStep1 : this.GridPos;
+                    }
+                }
+            }
         }
     }
 

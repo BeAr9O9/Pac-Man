@@ -22,10 +22,11 @@ namespace Pac_Man
         private void startButton_Click_1(object sender, EventArgs e)
         {
             this.Hide();
-            PacManForm pacManForm = new PacManForm();
+            PacManForm pacManForm = new PacManForm(funnyCheckBox.Checked);
             pacManForm.ShowDialog();
             this.Close();
         }
+
 
         private void editMazeButton_Click(object sender, EventArgs e)
         {
@@ -61,6 +62,11 @@ namespace Pac_Man
         private void closeButton_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        private void funnyCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
