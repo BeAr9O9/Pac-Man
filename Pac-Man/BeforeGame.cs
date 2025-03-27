@@ -32,8 +32,16 @@ namespace Pac_Man
         {
             try
             {
-                string mazeContent = File.ReadAllText("maze.txt");
-                textBoxMaze.Text = mazeContent;
+                string appName = "Pac-Man";
+                string appDataPath = Path.Combine(Environment.GetFolderPath(
+                    Environment.SpecialFolder.ApplicationData), appName);
+                string filePath = Path.Combine(appDataPath, "maze.txt");
+
+                if (File.Exists(filePath))
+                {
+                    string content = File.ReadAllText(filePath);
+                    textBoxMaze.Text = content;
+                }
                 textBoxMaze.Visible = true;
                 saveMazeButton.Visible = true;
             }
@@ -50,12 +58,22 @@ namespace Pac_Man
             {
                 var parts = textBoxMaze.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.None);
                 int size = int.Parse(parts[0]);
-                if (size != 25) 
+                if (size != 25)
                 {
                     MessageBox.Show("Maze size must be 25x25");
                     return;
                 }
-                File.WriteAllText("maze.txt", textBoxMaze.Text);
+                string appName = "Pac-Man";
+                string appDataPath = Path.Combine(Environment.GetFolderPath(
+                    Environment.SpecialFolder.ApplicationData), appName);
+
+                // Create the directory if it doesn't exist
+                if (!Directory.Exists(appDataPath))
+                {
+                    Directory.CreateDirectory(appDataPath);
+                }
+                string path = Path.Combine(appDataPath, "maze.txt");
+                File.WriteAllText(path, textBoxMaze.Text);
                 MessageBox.Show("Maze saved successfully!");
                 textBoxMaze.Visible = false;
                 saveMazeButton.Visible = false;

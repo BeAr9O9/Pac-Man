@@ -177,38 +177,46 @@ namespace PacManWindowsForms
 
         private void LoadMazeFromFile()
         {
-            using (StreamReader sr = new StreamReader(@"maze.txt"))
+            string appName = "Pac-Man";
+            string appDataPath = Path.Combine(Environment.GetFolderPath(
+                Environment.SpecialFolder.ApplicationData), appName);
+            string filePath = Path.Combine(appDataPath, "maze.txt");
+
+            if (File.Exists(filePath))
             {
-                string line;
-                line = sr.ReadLine();
-                mazeRows = int.Parse(line);
-                line = sr.ReadLine();
-                mazeColumns = int.Parse(line);
-                for (int i = 0; i < mazeRows; i++)
+                using (StreamReader sr = new StreamReader(filePath))
                 {
+                    string line;
                     line = sr.ReadLine();
-                    for (int j = 0; j < mazeColumns; j++)
+                    mazeRows = int.Parse(line);
+                    line = sr.ReadLine();
+                    mazeColumns = int.Parse(line);
+                    for (int i = 0; i < mazeRows; i++)
                     {
-                        if (line[j] == '0')
-                            mazeGrid[i, j] = 0;
-                        else if (line[j] == '#')
-                            mazeGrid[i, j] = 1;
-                        else if (line[j] == '.')
+                        line = sr.ReadLine();
+                        for (int j = 0; j < mazeColumns; j++)
                         {
-                            mazeGrid[i, j] = 2;
-                            remainingDots++;
-                        }
-                        else if (line[j] == 'P')
-                        {
-                            mazeGrid[i, j] = 0;
-                            pacmanGridPosition = new Point(j, i);
-                            pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
-                        }
-                        else if (line[j] == 'G')
-                        {
-                            mazeGrid[i, j] = 0;
-                            Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
-                            ghostsList.Add(ghost);
+                            if (line[j] == '0')
+                                mazeGrid[i, j] = 0;
+                            else if (line[j] == '#')
+                                mazeGrid[i, j] = 1;
+                            else if (line[j] == '.')
+                            {
+                                mazeGrid[i, j] = 2;
+                                remainingDots++;
+                            }
+                            else if (line[j] == 'P')
+                            {
+                                mazeGrid[i, j] = 0;
+                                pacmanGridPosition = new Point(j, i);
+                                pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
+                            }
+                            else if (line[j] == 'G')
+                            {
+                                mazeGrid[i, j] = 0;
+                                Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
+                                ghostsList.Add(ghost);
+                            }
                         }
                     }
                 }
