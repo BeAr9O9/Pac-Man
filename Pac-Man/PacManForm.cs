@@ -217,6 +217,12 @@ namespace PacManWindowsForms
                                 Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
                                 ghostsList.Add(ghost);
                             }
+                            else if (line[j] == 'H') // H represents Ghor
+                            {
+                                mazeGrid[i, j] = 0;
+                                Ghor ghor = new Ghor(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
+                                ghostsList.Add(ghor);
+                            }
                         }
                     }
                 }
@@ -598,6 +604,15 @@ namespace PacManWindowsForms
                 );
 
                 g.DrawImage(ghostImage, ghostRect);
+                
+                // If it's a Ghor, draw a red overlay to distinguish it from regular ghosts
+                if (ghost is Ghor)
+                {
+                    using (Brush redOverlay = new SolidBrush(Color.FromArgb(100, 255, 0, 0))) // Semi-transparent red
+                    {
+                        g.FillRectangle(redOverlay, ghostRect);
+                    }
+                }
             }
 
             float fontSize = Math.Max(12, cellSize / 2);
@@ -621,14 +636,14 @@ namespace PacManWindowsForms
 
         private class Ghost
         {
-            private bool isTeleporting = false;
+            protected bool isTeleporting = false;
             public Point GridPos;
             public PointF ScreenPos;
-            private Point? TargetCell;
+            protected Point? TargetCell;
             private const float BASE_SPEED = 4f;
             private const float BASE_CELL_SIZE = 30f;
 
-            public float CalculateSpeed(float currentCellSize) => BASE_SPEED * (currentCellSize / BASE_CELL_SIZE);
+            public virtual float CalculateSpeed(float currentCellSize) => BASE_SPEED * (currentCellSize / BASE_CELL_SIZE);
 
             public Ghost(bool isTeleporting, Point gridPos, PointF screenPos, Point? targetCell, float ghostSpeed)
             {
@@ -638,7 +653,7 @@ namespace PacManWindowsForms
                 TargetCell = targetCell;
             }
 
-            public void Update(PacManForm form)
+            public virtual void Update(PacManForm form)
             {
                 Point? nextStep = form.GetNextCellInPath(this.GridPos, form.pacmanGridPosition);
                 this.TargetCell = nextStep.HasValue ? nextStep : this.GridPos;
@@ -689,6 +704,87 @@ namespace PacManWindowsForms
                         this.TargetCell = nextStep1.HasValue ? nextStep1 : this.GridPos;
                     }
                 }
+            }
+        }
+
+        private class Ghor : Ghost
+        {
+            private const float GHOR_SPEED_MULTIPLIER = 1.5f; // Ghor is faster than regular ghosts
+            private int updateCounter = 0;
+            private Random random = new Random();
+
+            public Ghor(bool isTeleporting, Point gridPos, PointF screenPos, Point? targetCell, float ghostSpeed)
+                : base(isTeleporting, gridPos, screenPos, targetCell, ghostSpeed)
+            {
+            }
+
+            public override float CalculateSpeed(float currentCellSize) => 
+                base.CalculateSpeed(currentCellSize) * GHOR_SPEED_MULTIPLIER;
+
+            public override void Update(PacManForm form)
+            {
+                updateCounter++;
+                
+                // Ghor has a special behavior - every 5th update, it might choose a random direction instead of chasing
+                if (updateCounter % 5 == 0 && random.Next(100) < 30) // 30% chance to move randomly
+                {
+                    // Get all valid adjacent cells
+                    List<Point> validCells = new List<Point>();
+                    int[] dx = { 0, 0, -1, 1 };
+                    int[] dy = { -1, 1, 0, 0 };
+                    
+                    for (int dir = 0; dir < 4; dir++)
+                    {
+                        int newX = GridPos.X + dx[dir];
+                        int newY = GridPos.Y + dy[dir];
+                        
+                        // Handle wrapping
+                        if (newX < 0) newX = form.mazeColumns - 1;
+                        if (newX >= form.mazeColumns) newX = 0;
+                        if (newY < 0) newY = form.mazeRows - 1;
+                        if (newY >= form.mazeRows) newY = 0;
+                        
+                        if (form.mazeGrid[newY, newX] != 1) // Not a wall
+                        {
+                            validCells.Add(new Point(newX, newY));
+                        }
+                    }
+                    
+                    if (validCells.Count > 0)
+                    {
+                        Point randomTarget = validCells[random.Next(validCells.Count)];
+                        TargetCell = randomTarget;
+                        
+                        // Continue with normal movement logic but with the random target
+                        if (TargetCell.HasValue)
+                        {
+                            PointF targetCenter = form.GetCellCenterPosition(TargetCell.Value);
+                            PointF diff = new PointF(targetCenter.X - ScreenPos.X, targetCenter.Y - ScreenPos.Y);
+                            float distance = (float)Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
+                            float currentSpeed = CalculateSpeed(form.cellSize);
+
+                            if (distance < currentSpeed)
+                            {
+                                ScreenPos = targetCenter;
+                                GridPos = TargetCell.Value;
+                                TargetCell = null;
+                            }
+                            else
+                            {
+                                float vx = diff.X / distance;
+                                float vy = diff.Y / distance;
+                                ScreenPos = new PointF(
+                                    ScreenPos.X + vx * currentSpeed,
+                                    ScreenPos.Y + vy * currentSpeed
+                                );
+                            }
+                        }
+                        return; // Skip normal update
+                    }
+                }
+                
+                // Normal ghost behavior for most updates
+                base.Update(form);
             }
         }
     }
