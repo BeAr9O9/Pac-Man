@@ -204,46 +204,79 @@ namespace PacManWindowsForms
                 Environment.SpecialFolder.ApplicationData), appName);
             string filePath = Path.Combine(appDataPath, "maze.txt");
 
-            if (File.Exists(filePath))
+            if (!File.Exists(filePath))
             {
-                using (StreamReader sr = new StreamReader(filePath))
+                // Create directory and default maze if it doesn't exist
+                if (!Directory.Exists(appDataPath))
                 {
-                    string line;
+                    Directory.CreateDirectory(appDataPath);
+                }
+                
+                string defaultMaze = @"25
+25
+#########################
+#*......#.........*#
+#.##.#######.#######.##.#
+#.##.......#.#.......##.#
+#.##.#####.#.#.#####.##.#
+#....#...#...#...#....#
+####.#.#.#####.#.#.####
+....#.#.#.....#.#.#....
+##.#.#.#########.#.#.##
+#..#...#.......#...#..#
+#.###.###.###.###.###.#
+#.....P.#.....#.G.....#
+#.###.###.###.###.###.#
+#..#...#.......#...#..#
+##.#.#.#########.#.#.##
+....#.#.#.....#.#.#....
+####.#.#.#####.#.#.####
+#....#...#...#...#....#
+#.##.#####.#.#.#####.##.#
+#.##.......#.#.......##.#
+#.##.#######.#.#######.##.#
+#*......#.........*#
+#########################";
+                File.WriteAllText(filePath, defaultMaze);
+            }
+            
+            using (StreamReader sr = new StreamReader(filePath))
+            {
+                string line;
+                line = sr.ReadLine();
+                mazeRows = int.Parse(line);
+                line = sr.ReadLine();
+                mazeColumns = int.Parse(line);
+                for (int i = 0; i < mazeRows; i++)
+                {
                     line = sr.ReadLine();
-                    mazeRows = int.Parse(line);
-                    line = sr.ReadLine();
-                    mazeColumns = int.Parse(line);
-                    for (int i = 0; i < mazeRows; i++)
+                    for (int j = 0; j < mazeColumns; j++)
                     {
-                        line = sr.ReadLine();
-                        for (int j = 0; j < mazeColumns; j++)
+                        if (line[j] == '0')
+                            mazeGrid[i, j] = 0;
+                        else if (line[j] == '#')
+                            mazeGrid[i, j] = 1;
+                        else if (line[j] == '.')
                         {
-                            if (line[j] == '0')
-                                mazeGrid[i, j] = 0;
-                            else if (line[j] == '#')
-                                mazeGrid[i, j] = 1;
-                            else if (line[j] == '.')
-                            {
-                                mazeGrid[i, j] = 2;
-                                remainingDots++;
-                            }
-                            else if (line[j] == '*') // Power pellet
-                            {
-                                mazeGrid[i, j] = 3;
-                                remainingDots++;
-                            }
-                            else if (line[j] == 'P')
-                            {
-                                mazeGrid[i, j] = 0;
-                                pacmanGridPosition = new Point(j, i);
-                                pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
-                            }
-                            else if (line[j] == 'G')
-                            {
-                                mazeGrid[i, j] = 0;
-                                Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
-                                ghostsList.Add(ghost);
-                            }
+                            mazeGrid[i, j] = 2;
+                            remainingDots++;
+                        }
+                        else if (line[j] == '*') // Power pellet
+                        {
+                            mazeGrid[i, j] = 3;
+                            remainingDots++;
+                        }
+                        else if (line[j] == 'P')
+                        {
+                            mazeGrid[i, j] = 0;
+                            pacmanGridPosition = new Point(j, i);
+                            pacmanScreenPosition = GetCellCenterPosition(pacmanGridPosition);
+                        }
+                        else if (line[j] == 'G')
+                        {
+                            mazeGrid[i, j] = 0;
+                            Ghost ghost = new Ghost(false, new Point(j, i), GetCellCenterPosition(new Point(j, i)), null, 4f);
+                            ghostsList.Add(ghost);
                         }
                     }
                 }
@@ -705,6 +738,18 @@ namespace PacManWindowsForms
                 Brushes.White,
                 new PointF(10, 10)
             );
+            
+            // Display power mode indicator
+            if (isPowerMode)
+            {
+                g.DrawString(
+                    "POWER MODE!",
+                    new Font("Arial", fontSize, FontStyle.Bold),
+                    Brushes.Yellow,
+                    new PointF(10, 10 + fontSize + 5)
+                );
+            }
+            
             pauseGameButton.Location = new Point(this.ClientSize.Width - 100, 10);
         }
 

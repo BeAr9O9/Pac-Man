@@ -42,6 +42,43 @@ namespace Pac_Man
                     string content = File.ReadAllText(filePath);
                     textBoxMaze.Text = content;
                 }
+                else
+                {
+                    // Provide default maze with power pellets as example
+                    textBoxMaze.Text = @"25
+25
+#########################
+#*......#.........*#
+#.##.#######.#######.##.#
+#.##.......#.#.......##.#
+#.##.#####.#.#.#####.##.#
+#....#...#...#...#....#
+####.#.#.#####.#.#.####
+....#.#.#.....#.#.#....
+##.#.#.#########.#.#.##
+#..#...#.......#...#..#
+#.###.###.###.###.###.#
+#.....P.#.....#.G.....#
+#.###.###.###.###.###.#
+#..#...#.......#...#..#
+##.#.#.#########.#.#.##
+....#.#.#.....#.#.#....
+####.#.#.#####.#.#.####
+#....#...#...#...#....#
+#.##.#####.#.#.#####.##.#
+#.##.......#.#.......##.#
+#.##.#######.#.#######.##.#
+#*......#.........*#
+#########################
+
+Maze format:
+# = Wall
+. = Dot (10 points)
+* = Power pellet (50 points, makes ghosts vulnerable)
+P = Pac-Man start position
+G = Ghost start position
+0 = Empty space";
+                }
                 textBoxMaze.Visible = true;
                 saveMazeButton.Visible = true;
             }
@@ -56,13 +93,21 @@ namespace Pac_Man
         {
             try
             {
-                var parts = textBoxMaze.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.None);
-                int size = int.Parse(parts[0]);
-                if (size != 25)
+                var lines = textBoxMaze.Text.Split(new string[] { Environment.NewLine }, StringSplitOptions.None);
+                if (lines.Length < 2)
+                {
+                    MessageBox.Show("Invalid maze format. Must have at least height and width specified.");
+                    return;
+                }
+                
+                int rows = int.Parse(lines[0]);
+                int cols = int.Parse(lines[1]);
+                if (rows != 25 || cols != 25)
                 {
                     MessageBox.Show("Maze size must be 25x25");
                     return;
                 }
+                
                 string appName = "Pac-Man";
                 string appDataPath = Path.Combine(Environment.GetFolderPath(
                     Environment.SpecialFolder.ApplicationData), appName);
@@ -74,13 +119,13 @@ namespace Pac_Man
                 }
                 string path = Path.Combine(appDataPath, "maze.txt");
                 File.WriteAllText(path, textBoxMaze.Text);
-                MessageBox.Show("Maze saved successfully!");
+                MessageBox.Show("Maze saved successfully!\n\nPower pellets (*) will make ghosts vulnerable for 10 seconds.");
                 textBoxMaze.Visible = false;
                 saveMazeButton.Visible = false;
             }
-            catch
+            catch (Exception ex)
             {
-                MessageBox.Show("Error saving maze file");
+                MessageBox.Show($"Error saving maze file: {ex.Message}");
             }
         }
 
