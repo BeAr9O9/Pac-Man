@@ -33,6 +33,11 @@ namespace PacManWindowsForms
         private int remainingDots = 0;
         private int playerScore = 0;
         private const int INFINITY = 1000000;
+        
+        // Power pellet related fields
+        private bool isPowerMode = false;
+        private Timer powerModeTimer;
+        private const int POWER_MODE_DURATION = 10000; // 10 seconds in milliseconds
         private Button pauseGameButton;
 
         private Bitmap pacmanImage;
@@ -70,6 +75,11 @@ namespace PacManWindowsForms
             gameTimer.Interval = 20;
             gameTimer.Tick += GameLoop;
             gameTimer.Start();
+
+            // Initialize power mode timer
+            powerModeTimer = new Timer();
+            powerModeTimer.Interval = POWER_MODE_DURATION;
+            powerModeTimer.Tick += OnPowerModeEnd;
 
             SetupPauseButton();
             this.KeyDown += OnKeyDown;
@@ -128,6 +138,18 @@ namespace PacManWindowsForms
             this.MinimumSize = new Size(screenSize.Width / 2, screenSize.Height / 2);
             this.Resize += OnWindowResize;
             UpdateCellSize();
+        }
+
+        private void OnPowerModeEnd(object sender, EventArgs e)
+        {
+            isPowerMode = false;
+            powerModeTimer.Stop();
+            
+            // Reset all ghosts to normal state
+            foreach (var ghost in ghostsList)
+            {
+                ghost.IsVulnerable = false;
+            }
         }
 
         private void OnWindowResize(object sender, EventArgs e)
@@ -203,6 +225,11 @@ namespace PacManWindowsForms
                             else if (line[j] == '.')
                             {
                                 mazeGrid[i, j] = 2;
+                                remainingDots++;
+                            }
+                            else if (line[j] == '*') // Power pellet
+                            {
+                                mazeGrid[i, j] = 3;
                                 remainingDots++;
                             }
                             else if (line[j] == 'P')
@@ -419,6 +446,8 @@ namespace PacManWindowsForms
                         pacmanScreenPosition = targetCenter;
                         pacmanGridPosition = pacmanTargetCell.Value;
                         pacmanTargetCell = null;
+                        
+                        // Check for dot collision
                         if (mazeGrid[pacmanGridPosition.Y, pacmanGridPosition.X] == 2)
                         {
                             mazeGrid[pacmanGridPosition.Y, pacmanGridPosition.X] = 0;
@@ -428,6 +457,35 @@ namespace PacManWindowsForms
                             }
                             playerScore += 10;
                             remainingDots--;
+
+                            if (remainingDots == 0)
+                            {
+                                gameTimer.Stop();
+                                MessageBox.Show($"You Win! Your score: {playerScore}");
+                                Application.Exit();
+                            }
+                        }
+                        // Check for power pellet collision
+                        else if (mazeGrid[pacmanGridPosition.Y, pacmanGridPosition.X] == 3)
+                        {
+                            mazeGrid[pacmanGridPosition.Y, pacmanGridPosition.X] = 0;
+                            if (dotEatingSoundPlayer != null)
+                            {
+                                dotEatingSoundPlayer.Play();
+                            }
+                            playerScore += 50; // Power pellets worth more points
+                            remainingDots--;
+                            
+                            // Activate power mode
+                            isPowerMode = true;
+                            powerModeTimer.Stop(); // Stop any existing timer
+                            powerModeTimer.Start(); // Start new power mode duration
+                            
+                            // Make all ghosts vulnerable
+                            foreach (var ghost in ghostsList)
+                            {
+                                ghost.IsVulnerable = true;
+                            }
 
                             if (remainingDots == 0)
                             {
@@ -468,6 +526,10 @@ namespace PacManWindowsForms
             pacmanTargetCell = null;
             isPacmanTeleporting = false;
             remainingDots = 0;
+            
+            // Reset power mode
+            isPowerMode = false;
+            powerModeTimer.Stop();
 
             LoadMazeFromFile();
             BuildGraphAndComputePaths();
@@ -491,8 +553,24 @@ namespace PacManWindowsForms
                 PointF diff = ghost.ScreenPos.Subtract(pacmanScreenPosition);
                 if (diff.Length() < cellSize / 2)
                 {
-                    isGameOver = true;
-                    break;
+                    if (ghost.IsVulnerable)
+                    {
+                        // Pac-Man eats vulnerable ghost
+                        playerScore += 200; // Bonus points for eating ghost
+                        // Reset ghost position to starting position
+                        ghost.ResetToStart();
+                        ghost.ScreenPos = GetCellCenterPosition(ghost.GridPos); // Update screen position
+                        ghost.IsVulnerable = false; // Ghost becomes normal again after being eaten
+                        if (dotEatingSoundPlayer != null)
+                        {
+                            dotEatingSoundPlayer.Play();
+                        }
+                    }
+                    else
+                    {
+                        isGameOver = true;
+                        break;
+                    }
                 }
             }
 
@@ -552,6 +630,17 @@ namespace PacManWindowsForms
                         );
                         g.FillEllipse(Brushes.Yellow, dotRect);
                     }
+                    else if (mazeGrid[i, j] == 3) // Power pellet
+                    {
+                        float pelletSize = cellSize / 1.5f; // Larger than regular dots
+                        RectangleF pelletRect = new RectangleF(
+                            cellRect.X + (cellSize - pelletSize) / 2,
+                            cellRect.Y + (cellSize - pelletSize) / 2,
+                            pelletSize,
+                            pelletSize
+                        );
+                        g.FillEllipse(Brushes.Yellow, pelletRect);
+                    }
                 }
             }
 
@@ -597,7 +686,16 @@ namespace PacManWindowsForms
                     cellSize
                 );
 
-                g.DrawImage(ghostImage, ghostRect);
+                if (ghost.IsVulnerable)
+                {
+                    // Draw vulnerable ghost in blue/dark blue
+                    g.FillEllipse(Brushes.DarkBlue, ghostRect);
+                    g.DrawEllipse(Pens.Blue, ghostRect);
+                }
+                else
+                {
+                    g.DrawImage(ghostImage, ghostRect);
+                }
             }
 
             float fontSize = Math.Max(12, cellSize / 2);
@@ -627,6 +725,8 @@ namespace PacManWindowsForms
             private Point? TargetCell;
             private const float BASE_SPEED = 4f;
             private const float BASE_CELL_SIZE = 30f;
+            private Point startingPosition; // Store original position for reset
+            public bool IsVulnerable { get; set; } = false;
 
             public float CalculateSpeed(float currentCellSize) => BASE_SPEED * (currentCellSize / BASE_CELL_SIZE);
 
@@ -636,6 +736,15 @@ namespace PacManWindowsForms
                 GridPos = gridPos;
                 ScreenPos = screenPos;
                 TargetCell = targetCell;
+                startingPosition = gridPos; // Store starting position
+            }
+
+            public void ResetToStart()
+            {
+                GridPos = startingPosition;
+                ScreenPos = new PointF(); // This will be set by the form's GetCellCenterPosition method
+                TargetCell = null;
+                isTeleporting = false;
             }
 
             public void Update(PacManForm form)
